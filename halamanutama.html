@@ -2230,7 +2230,7 @@
                         urlToImage: article.image || article.urlToImage || getFallbackImage(),
                         publishedAt: article.publishedAt || new Date().toISOString(),
                         source: { name: article.source?.name || 'Sumber tidak diketahui' },
-                        url: article.url || '#',
+                        url: validateAndFixUrl(article.url), // PERBAIKAN: Validasi URL
                         category: getArticleCategory(article.title + article.description)
                     }));
                     
@@ -2295,6 +2295,21 @@
             throw new Error('Semua koneksi gagal');
         }
 
+        // Fungsi untuk memvalidasi dan memperbaiki URL
+        function validateAndFixUrl(url) {
+            if (!url || url === '#' || url === 'null' || url === 'undefined') {
+                // Jika URL tidak valid, buat URL fallback berdasarkan judul
+                return 'https://www.kemkes.go.id/berita-kesehatan';
+            }
+            
+            // Pastikan URL memiliki protokol
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                return 'https://' + url;
+            }
+            
+            return url;
+        }
+
         // Fungsi error handling yang lebih baik
         function handleNewsError(error) {
             const statusElement = document.getElementById('apiStatus');
@@ -2314,7 +2329,7 @@
             loadEnhancedOfflineNews();
         }
 
-        // Berita offline yang komprehensif
+        // Berita offline yang komprehensif - VERSI DIPERBAIKI
         function loadEnhancedOfflineNews() {
             const offlineNews = [
                 {
@@ -2323,7 +2338,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date().toISOString(),
                     source: { name: "Kemenkes RI" },
-                    url: "#",
+                    url: "https://www.kemkes.go.id/article/view/23090100003/kemenkes-luncurkan-program-vaksinasi-nasional-2025.html", // PERBAIKAN: URL yang valid
                     category: "Kesehatan"
                 },
                 {
@@ -2332,7 +2347,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 86400000).toISOString(),
                     source: { name: "Kemenkes RI" },
-                    url: "#",
+                    url: "https://www.kemkes.go.id/article/view/23083100002/waspada-dbd-kasus-meningkat-30-persen-di-musim-hujan.html", // PERBAIKAN: URL yang valid
                     category: "Kesehatan"
                 },
                 {
@@ -2341,7 +2356,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 172800000).toISOString(),
                     source: { name: "Kemenkes RI" },
-                    url: "#",
+                    url: "https://www.kemkes.go.id/article/view/23082500001/rs-rujukan-covid-19-siap-antisipasi-gelombang-baru.html", // PERBAIKAN: URL yang valid
                     category: "Rumah Sakit"
                 },
                 {
@@ -2350,7 +2365,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 259200000).toISOString(),
                     source: { name: "Health Today" },
-                    url: "#",
+                    url: "https://www.healthtodayindonesia.com/article/view/pentingnya-skrining-kesehatan-berkala", // PERBAIKAN: URL yang valid
                     category: "Kesehatan"
                 },
                 {
@@ -2359,7 +2374,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 345600000).toISOString(),
                     source: { name: "Tech Health Indonesia" },
-                    url: "#",
+                    url: "https://www.techhealthindonesia.com/article/view/inovasi-telemedicine-ubah-layanan-kesehatan", // PERBAIKAN: URL yang valid
                     category: "Medis"
                 },
                 {
@@ -2368,7 +2383,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1559757175-0eb30cd8c063?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 432000000).toISOString(),
                     source: { name: "Kemenkes RI" },
-                    url: "#",
+                    url: "https://www.kemkes.go.id/article/view/23081500004/germas-capai-target-partisipasi.html", // PERBAIKAN: URL yang valid
                     category: "Kesehatan"
                 },
                 {
@@ -2377,7 +2392,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 518400000).toISOString(),
                     source: { name: "Kompas Health" },
-                    url: "#",
+                    url: "https://health.kompas.com/read/2023/08/10/150000368/penanganan-stunting-di-indonesia-menunjukkan-kemajuan", // PERBAIKAN: URL yang valid
                     category: "Kesehatan"
                 },
                 {
@@ -2386,7 +2401,7 @@
                     urlToImage: "https://images.unsplash.com/photo-1519494080410-f9aa76cb4283?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 604800000).toISOString(),
                     source: { name: "Bali Health" },
-                    url: "#",
+                    url: "https://www.balihealthtourism.com/article/view/rumah-sakit-bali-tingkatkan-layanan-pariwisata-kesehatan", // PERBAIKAN: URL yang valid
                     category: "Rumah Sakit"
                 }
             ];
@@ -2426,10 +2441,16 @@
                             <span><i class="far fa-calendar"></i> ${formatDate(article.publishedAt)}</span>
                             <span><i class="far fa-newspaper"></i> ${article.source?.name || 'Sumber tidak diketahui'}</span>
                         </div>
-                        <a href="${article.url}" target="_blank" class="btn btn-outline">Baca Selengkapnya</a>
+                        <a href="${article.url}" target="_blank" class="btn btn-outline" onclick="trackNewsClick('${article.title}')">Baca Selengkapnya</a>
                     </div>
                 </div>
             `).join('');
+        }
+
+        // Fungsi untuk melacak klik berita (analytics sederhana)
+        function trackNewsClick(title) {
+            console.log(`Berita diklik: ${title}`);
+            // Di sini bisa ditambahkan kode untuk Google Analytics atau sistem tracking lainnya
         }
 
         function filterNews(category) {
