@@ -1869,10 +1869,10 @@
     <section id="news" class="section news">
         <div class="container">
             <h2 class="section-title">Berita Kesehatan Terkini</h2>
-            <p class="section-subtitle">Update real-time dari berbagai sumber terpercaya</p>
+            <p class="section-subtitle">Update real-time dari GNews API - Berita kesehatan aktual Indonesia</p>
             
-            <div id="apiStatus" class="api-status">
-                <i class="fas fa-sync fa-spin"></i> Memuat berita kesehatan...
+            <div id="apiStatus" class="api-status status-live">
+                <i class="fas fa-sync fa-spin"></i> Memuat berita kesehatan terkini...
             </div>
 
             <div class="news-controls">
@@ -1880,6 +1880,9 @@
                 <button class="btn btn-outline" onclick="filterNews('health')">Kesehatan</button>
                 <button class="btn btn-outline" onclick="filterNews('medicine')">Medis</button>
                 <button class="btn btn-outline" onclick="filterNews('hospital')">Rumah Sakit</button>
+                <button class="btn btn-outline" onclick="manualRefreshNews()" title="Refresh Berita">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
             </div>
 
             <div class="news-grid" id="newsContainer">
@@ -1895,7 +1898,7 @@
                     Terupdate: <span id="lastUpdateTime">-</span>
                 </p>
                 <div class="api-info">
-                    <small>Data dari: <span id="apiSource">MediaStack API</span></small>
+                    <small>Data dari: <span id="apiSource">GNews API - Berita Kesehatan Indonesia</span></small>
                 </div>
             </div>
         </div>
@@ -2151,6 +2154,14 @@
     <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
 
     <script>
+        // ========== KONFIGURASI GNEWS API ==========
+        const GNEWS_API_KEY = '01ecc529a408acea5b2c68c11b848f58';
+        const NEWS_UPDATE_INTERVAL = 10 * 60 * 1000; // 10 menit
+
+        let allNews = [];
+        let currentNewsFilter = 'all';
+        let newsRefreshInterval;
+
         // ========== FUNGSI UTAMA ==========
         
         // Dark Mode Toggle
@@ -2192,6 +2203,228 @@
             navOverlay.classList.remove('active');
         }
 
+        // ========== FUNGSI GNEWS API ==========
+        async function fetchHealthNews() {
+            const statusElement = document.getElementById('apiStatus');
+            
+            try {
+                statusElement.innerHTML = '<i class="fas fa-sync fa-spin"></i> Mengambil berita terkini...';
+                statusElement.className = 'api-status status-live';
+
+                // GNews API - Top headlines kesehatan Indonesia
+                const url = `https://gnews.io/api/v4/top-headlines?category=health&lang=id&country=id&max=12&apikey=${GNEWS_API_KEY}`;
+                
+                console.log('Fetching from GNews API...');
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} - GNews API Error`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.articles && data.articles.length > 0) {
+                    allNews = data.articles.map(article => ({
+                        title: article.title || 'Judul tidak tersedia',
+                        description: article.description || 'Deskripsi tidak tersedia',
+                        urlToImage: article.image || getFallbackImage(),
+                        publishedAt: article.publishedAt || new Date().toISOString(),
+                        source: { name: article.source?.name || 'Sumber tidak diketahui' },
+                        url: article.url || '#',
+                        category: getArticleCategory(article.title + article.description)
+                    }));
+                    
+                    displayNews(allNews);
+                    statusElement.innerHTML = `<i class="fas fa-check-circle"></i> Berhasil memuat ${allNews.length} berita terkini`;
+                    statusElement.className = 'api-status status-live';
+                    
+                } else {
+                    throw new Error('Tidak ada berita ditemukan');
+                }
+                
+            } catch (error) {
+                console.error('GNews API Error:', error);
+                statusElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Gagal mengambil berita: ${error.message}`;
+                statusElement.className = 'api-status status-error';
+                
+                // Fallback ke data contoh
+                loadFallbackNews();
+            }
+            
+            updateLastUpdateTime();
+        }
+
+        function loadFallbackNews() {
+            const fallbackNews = [
+                {
+                    title: "Kemenkes Luncurkan Program Vaksinasi Nasional 2025",
+                    description: "Kementerian Kesehatan meluncurkan program vaksinasi nasional terbaru untuk meningkatkan cakupan imunisasi di seluruh Indonesia.",
+                    urlToImage: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date().toISOString(),
+                    source: { name: "Kemenkes RI" },
+                    url: "#",
+                    category: "Kesehatan"
+                },
+                {
+                    title: "Penemuan Baru: Obat Diabetes Tipe 2 Lebih Efektif",
+                    description: "Peneliti Indonesia berhasil mengembangkan formula obat diabetes tipe 2 yang lebih efektif dengan efek samping minimal.",
+                    urlToImage: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 86400000).toISOString(),
+                    source: { name: "Kompas Health" },
+                    url: "#",
+                    category: "Medis"
+                },
+                {
+                    title: "Waspada DBD: Kasus Meningkat 30% di Musim Hujan",
+                    description: "Kemenkes mengimbau masyarakat waspada terhadap peningkatan kasus DBD yang naik 30% selama musim hujan.",
+                    urlToImage: "https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 172800000).toISOString(),
+                    source: { name: "Kemenkes RI" },
+                    url: "#",
+                    category: "Kesehatan"
+                }
+            ];
+            
+            allNews = fallbackNews;
+            displayNews(fallbackNews);
+        }
+
+        function displayNews(newsArray) {
+            const newsContainer = document.getElementById('newsContainer');
+            
+            if (!newsArray || newsArray.length === 0) {
+                newsContainer.innerHTML = `
+                    <div class="news-loading">
+                        <i class="fas fa-newspaper"></i>
+                        <p>Tidak ada berita ditemukan</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            newsContainer.innerHTML = newsArray.map((article, index) => `
+                <div class="card news-card" data-index="${index}">
+                    <div class="news-image">
+                        ${article.urlToImage ? 
+                            `<img src="${article.urlToImage}" alt="${article.title}" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\"fallback-image\"><i class=\"fas fa-newspaper\"></i></div>'">` :
+                            `<div class="fallback-image"><i class="fas fa-newspaper"></i></div>`
+                        }
+                        <div class="news-category">
+                            ${article.category}
+                        </div>
+                    </div>
+                    <div class="news-content">
+                        <h3>${article.title || 'Judul tidak tersedia'}</h3>
+                        <p class="news-excerpt">${truncateText(article.description || 'Deskripsi tidak tersedia', 120)}</p>
+                        <div class="news-meta">
+                            <span><i class="far fa-calendar"></i> ${formatDate(article.publishedAt)}</span>
+                            <span><i class="far fa-newspaper"></i> ${article.source?.name || 'Sumber tidak diketahui'}</span>
+                        </div>
+                        <a href="${article.url}" target="_blank" class="btn btn-outline">Baca Selengkapnya</a>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterNews(category) {
+            currentNewsFilter = category;
+            
+            // Update active button
+            document.querySelectorAll('.news-controls .btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('btn-outline');
+            });
+            event.target.classList.add('active');
+            event.target.classList.remove('btn-outline');
+            
+            if (category === 'all') {
+                displayNews(allNews);
+                return;
+            }
+            
+            const filteredNews = allNews.filter(article => {
+                const content = `${article.title} ${article.description}`.toLowerCase();
+                
+                switch(category) {
+                    case 'health':
+                        return content.includes('kesehatan') || content.includes('health');
+                    case 'medicine':
+                        return content.includes('obat') || content.includes('medicine') || content.includes('medis');
+                    case 'hospital':
+                        return content.includes('rumah sakit') || content.includes('hospital');
+                    default:
+                        return true;
+                }
+            });
+            
+            displayNews(filteredNews);
+        }
+
+        function manualRefreshNews() {
+            const statusElement = document.getElementById('apiStatus');
+            statusElement.innerHTML = '<i class="fas fa-sync fa-spin"></i> Memperbarui...';
+            fetchHealthNews();
+        }
+
+        function startAutoRefresh() {
+            console.log('Starting news auto-refresh...');
+            
+            // Refresh pertama kali
+            fetchHealthNews();
+            
+            // Set interval untuk auto-refresh
+            newsRefreshInterval = setInterval(() => {
+                console.log('Auto-refreshing news...');
+                fetchHealthNews();
+            }, NEWS_UPDATE_INTERVAL);
+        }
+
+        // Helper functions
+        function truncateText(text, maxLength) {
+            if (!text) return 'Deskripsi tidak tersedia';
+            if (text.length <= maxLength) return text;
+            return text.substr(0, maxLength) + '...';
+        }
+
+        function formatDate(dateString) {
+            try {
+                if (!dateString) return 'Tanggal tidak valid';
+                const date = new Date(dateString);
+                return date.toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+            } catch (error) {
+                return 'Tanggal tidak valid';
+            }
+        }
+
+        function getArticleCategory(content) {
+            if (!content) return 'Kesehatan';
+            
+            const text = content.toLowerCase();
+            if (text.includes('rumah sakit') || text.includes('hospital')) return 'Rumah Sakit';
+            if (text.includes('obat') || text.includes('medicine') || text.includes('medis')) return 'Medis';
+            return 'Kesehatan';
+        }
+
+        function getFallbackImage() {
+            const healthImages = [
+                'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+                'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+                'https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'
+            ];
+            return healthImages[Math.floor(Math.random() * healthImages.length)];
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            document.getElementById('lastUpdateTime').textContent = 
+                now.toLocaleTimeString('id-ID') + ' WIB';
+        }
+
         // ========== FUNGSI PETA FASILITAS KESEHATAN ==========
         let healthcareMap;
         let healthcareMarkers;
@@ -2217,7 +2450,7 @@
             // Ambil data fasilitas kesehatan dari Overpass API
             loadHealthcareData();
 
-            // Event listener untuk tombol lokasi - PERBAIKAN DI SINI
+            // Event listener untuk tombol lokasi
             document.getElementById('locateMe').addEventListener('click', function() {
                 locateUser();
             });
@@ -2416,9 +2649,7 @@
                     
                     switch(error.code) {
                         case error.PERMISSION_DENIED:
-                            errorMessage = "Akses lokasi ditolak. Izinkan akses lokasi untuk menggunakan fitur ini. Pastikan browser Anda mengizinkan akses lokasi untuk website ini.";
-                            // Tampilkan instruksi untuk mengaktifkan permission
-                            showPermissionInstructions();
+                            errorMessage = "Akses lokasi ditolak. Izinkan akses lokasi untuk menggunakan fitur ini.";
                             break;
                         case error.POSITION_UNAVAILABLE:
                             errorMessage = "Informasi lokasi tidak tersedia. Pastikan GPS atau koneksi internet aktif.";
@@ -2440,45 +2671,6 @@
             );
         }
 
-        // Fungsi untuk menampilkan instruksi permission
-        function showPermissionInstructions() {
-            const instructions = `
-                <div style="text-align: left; padding: 15px;">
-                    <h4>Cara Mengaktifkan Akses Lokasi:</h4>
-                    <p><strong>Chrome/Edge:</strong></p>
-                    <ul>
-                        <li>Klik ikon gembok/gambar di sebelah kiri address bar</li>
-                        <li>Pilih "Site settings"</li>
-                        <li>Cari "Location" dan pilih "Allow"</li>
-                        <li>Refresh halaman</li>
-                    </ul>
-                    <p><strong>Firefox:</strong></p>
-                    <ul>
-                        <li>Klik ikon gembok di address bar</li>
-                        <li>Klik panah kanan di samping "Connection secure"</li>
-                        <li>Ubah "Location" menjadi "Allow"</li>
-                        <li>Refresh halaman</li>
-                    </ul>
-                    <p><strong>Safari:</strong></p>
-                    <ul>
-                        <li>Pergi ke Preferences > Websites > Location</li>
-                        <li>Cari website ini dan pilih "Allow"</li>
-                        <li>Refresh halaman</li>
-                    </ul>
-                </div>
-            `;
-            
-            // Tampilkan dalam popup atau alert
-            if (document.getElementById('materialPopup')) {
-                document.getElementById('materialTitle').textContent = 'Instruksi Akses Lokasi';
-                document.getElementById('materialContent').innerHTML = instructions;
-                document.getElementById('materialPopup').classList.add('active');
-            } else {
-                alert("Izinkan akses lokasi di pengaturan browser Anda untuk menggunakan fitur ini.");
-            }
-        }
-
-        // Fungsi untuk menampilkan notifikasi
         function showNotification(message, type = 'info') {
             // Buat elemen notifikasi
             const notification = document.createElement('div');
@@ -2861,256 +3053,6 @@
             calculatorResult.classList.add('active');
         }
 
-        // ========== FUNGSI BERITA KESEHATAN DENGAN MEDIASTACK ==========
-        const MEDIASTACK_API_KEY = '1e7736edd85ba8ed448a69d53694b9e6';
-        let allNews = [];
-        let currentNewsFilter = 'all';
-
-        // Keyword untuk berita kesehatan
-        const healthKeywords = [
-            'kesehatan', 'health', 'medis', 'medical', 'rumah sakit', 'hospital',
-            'dokter', 'doctor', 'penyakit', 'disease', 'obat', 'medicine',
-            'vaksin', 'vaccine', 'pandemi', 'pandemic', 'virus', 'covid',
-            'diabetes', 'jantung', 'heart', 'kanker', 'cancer', 'gizi', 'nutrition'
-        ];
-
-        // Fungsi utama untuk mengambil berita
-        async function fetchHealthNews() {
-            const statusElement = document.getElementById('apiStatus');
-            
-            try {
-                statusElement.innerHTML = '<i class="fas fa-sync fa-spin"></i> Mengambil berita terbaru...';
-                statusElement.className = 'api-status status-live';
-
-                // Gunakan MediaStack API
-                const keywords = 'kesehatan,medis,rumah sakit';
-                const url = `http://api.mediastack.com/v1/news?access_key=${MEDIASTACK_API_KEY}&keywords=${keywords}&languages=id&limit=12`;
-                
-                console.log('Fetching from MediaStack:', url);
-                
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (data.data && data.data.length > 0) {
-                    allNews = data.data.map(article => ({
-                        title: article.title,
-                        description: article.description,
-                        urlToImage: article.image || getFallbackImage(),
-                        publishedAt: article.published_at,
-                        source: { name: article.source || 'Sumber tidak diketahui' },
-                        url: article.url || '#',
-                        category: getArticleCategory(article)
-                    }));
-                    
-                    displayNews(allNews);
-                    statusElement.innerHTML = `<i class="fas fa-check-circle"></i> Berhasil memuat ${allNews.length} berita terkini`;
-                    statusElement.className = 'api-status status-live';
-                    updateLastUpdateTime();
-                } else {
-                    throw new Error('Tidak ada berita ditemukan');
-                }
-                
-            } catch (error) {
-                console.error('Error fetching news:', error);
-                statusElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Gagal mengambil berita: ${error.message}. Menggunakan data contoh...`;
-                statusElement.className = 'api-status status-error';
-                
-                // Fallback ke data contoh
-                loadFallbackNews();
-            }
-        }
-
-        // Fungsi untuk menampilkan berita
-        function displayNews(newsArray) {
-            const newsContainer = document.getElementById('newsContainer');
-            
-            if (!newsArray || newsArray.length === 0) {
-                newsContainer.innerHTML = `
-                    <div class="news-loading">
-                        <i class="fas fa-newspaper"></i>
-                        <p>Tidak ada berita ditemukan</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            newsContainer.innerHTML = newsArray.map((article, index) => `
-                <div class="card news-card" data-index="${index}">
-                    <div class="news-image">
-                        ${article.urlToImage ? 
-                            `<img src="${article.urlToImage}" alt="${article.title}" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\"fallback-image\"><i class=\"fas fa-newspaper\"></i></div>'">` :
-                            `<div class="fallback-image"><i class="fas fa-newspaper"></i></div>`
-                        }
-                        <div class="news-category">
-                            ${article.category}
-                        </div>
-                    </div>
-                    <div class="news-content">
-                        <h3>${article.title || 'Judul tidak tersedia'}</h3>
-                        <p class="news-excerpt">${truncateText(article.description || 'Deskripsi tidak tersedia', 120)}</p>
-                        <div class="news-meta">
-                            <span><i class="far fa-calendar"></i> ${formatDate(article.publishedAt)}</span>
-                            <span><i class="far fa-newspaper"></i> ${article.source?.name || 'Sumber tidak diketahui'}</span>
-                        </div>
-                        <a href="${article.url}" target="_blank" class="btn btn-outline">Baca Selengkapnya</a>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Fungsi filter berita
-        function filterNews(category) {
-            currentNewsFilter = category;
-            
-            // Update active button
-            document.querySelectorAll('.news-controls .btn').forEach(btn => {
-                btn.classList.remove('active');
-                btn.classList.add('btn-outline');
-            });
-            event.target.classList.add('active');
-            event.target.classList.remove('btn-outline');
-            
-            if (category === 'all') {
-                displayNews(allNews);
-                return;
-            }
-            
-            const filteredNews = allNews.filter(article => {
-                const content = `${article.title} ${article.description}`.toLowerCase();
-                
-                switch(category) {
-                    case 'health':
-                        return content.includes('kesehatan') || content.includes('health');
-                    case 'medicine':
-                        return content.includes('obat') || content.includes('medicine') || content.includes('medis');
-                    case 'hospital':
-                        return content.includes('rumah sakit') || content.includes('hospital');
-                    default:
-                        return true;
-                }
-            });
-            
-            displayNews(filteredNews);
-        }
-
-        // Fungsi bantu
-        function truncateText(text, maxLength) {
-            if (!text) return 'Deskripsi tidak tersedia';
-            if (text.length <= maxLength) return text;
-            return text.substr(0, maxLength) + '...';
-        }
-
-        function formatDate(dateString) {
-            try {
-                if (!dateString) return 'Tanggal tidak valid';
-                const date = new Date(dateString);
-                return date.toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                });
-            } catch (error) {
-                return 'Tanggal tidak valid';
-            }
-        }
-
-        function getArticleCategory(article) {
-            const content = `${article.title} ${article.description}`.toLowerCase();
-            
-            if (content.includes('rumah sakit') || content.includes('hospital')) {
-                return 'Rumah Sakit';
-            } else if (content.includes('obat') || content.includes('medicine') || content.includes('medis')) {
-                return 'Medis';
-            } else {
-                return 'Kesehatan';
-            }
-        }
-
-        function getFallbackImage() {
-            const healthImages = [
-                'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-                'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-                'https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-                'https://images.unsplash.com/photo-1559757175-0eb30cd8c063?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'
-            ];
-            return healthImages[Math.floor(Math.random() * healthImages.length)];
-        }
-
-        function updateLastUpdateTime() {
-            const now = new Date();
-            document.getElementById('lastUpdateTime').textContent = 
-                now.toLocaleTimeString('id-ID') + ' WIB';
-        }
-
-        // Data fallback jika API gagal
-        function loadFallbackNews() {
-            const fallbackNews = [
-                {
-                    title: "Kemenkes Luncurkan Program Vaksinasi Nasional 2025",
-                    description: "Kementerian Kesehatan meluncurkan program vaksinasi nasional terbaru untuk meningkatkan cakupan imunisasi di seluruh Indonesia.",
-                    urlToImage: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date().toISOString(),
-                    source: { name: "Kemenkes RI" },
-                    url: "#",
-                    category: "Kesehatan"
-                },
-                {
-                    title: "Penemuan Baru: Obat Diabetes Tipe 2 Lebih Efektif",
-                    description: "Peneliti Indonesia berhasil mengembangkan formula obat diabetes tipe 2 yang lebih efektif dengan efek samping minimal.",
-                    urlToImage: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date(Date.now() - 86400000).toISOString(),
-                    source: { name: "Kompas Health" },
-                    url: "#",
-                    category: "Medis"
-                },
-                {
-                    title: "Waspada DBD: Kasus Meningkat 30% di Musim Hujan",
-                    description: "Kemenkes mengimbau masyarakat waspada terhadap peningkatan kasus DBD yang naik 30% selama musim hujan.",
-                    urlToImage: "https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date(Date.now() - 172800000).toISOString(),
-                    source: { name: "Kemenkes RI" },
-                    url: "#",
-                    category: "Kesehatan"
-                },
-                {
-                    title: "RS Premier Bintaro Buka Layanan Kardiologi Terpadu",
-                    description: "Rumah Sakit Premier Bintaro membuka layanan kardiologi terpadu dengan teknologi terkini untuk penanganan penyakit jantung.",
-                    urlToImage: "https://images.unsplash.com/photo-1516549655669-df5c7898c491?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date(Date.now() - 259200000).toISOString(),
-                    source: { name: "RS Premier Bintaro" },
-                    url: "#",
-                    category: "Rumah Sakit"
-                },
-                {
-                    title: "Tips Menjaga Kesehatan Mental di Era Digital",
-                    description: "Psikolog membagikan tips praktis menjaga kesehatan mental di tengah tekanan kehidupan digital yang semakin tinggi.",
-                    urlToImage: "https://images.unsplash.com/photo-1559757175-0eb30cd8c063?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date(Date.now() - 345600000).toISOString(),
-                    source: { name: "Kompas Health" },
-                    url: "#",
-                    category: "Kesehatan"
-                },
-                {
-                    title: "Inovasi Telemedicine Ubah Layanan Kesehatan di Indonesia",
-                    description: "Layanan telemedicine semakin populer dan mengubah cara masyarakat Indonesia mengakses layanan kesehatan.",
-                    urlToImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date(Date.now() - 432000000).toISOString(),
-                    source: { name: "Tech in Asia" },
-                    url: "#",
-                    category: "Medis"
-                }
-            ];
-            
-            allNews = fallbackNews;
-            displayNews(fallbackNews);
-            updateLastUpdateTime();
-        }
-
         // ========== FUNGSI PERKEMBANGAN ANAK ==========
         const checkDevBtn = document.getElementById('checkDev');
         const devResult = document.getElementById('devResult');
@@ -3479,11 +3421,15 @@
             // Perkembangan Anak
             checkDevBtn.addEventListener('click', checkDevelopment);
 
-            // Berita Kesehatan - Panggil fungsi untuk mengambil berita
-            fetchHealthNews();
+            // Berita Kesehatan - Start auto-refresh
+            startAutoRefresh();
             
-            // Auto-refresh berita setiap 30 menit
-            setInterval(fetchHealthNews, 30 * 60 * 1000);
+            // Juga refresh ketika user kembali ke tab
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    fetchHealthNews();
+                }
+            });
         });
     </script>
 
