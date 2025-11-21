@@ -1274,6 +1274,12 @@
             border: 1px solid #fca5a5;
         }
 
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+
         .news-controls {
             display: flex;
             justify-content: center;
@@ -1866,7 +1872,7 @@
             <p class="section-subtitle">Update real-time dari berbagai sumber terpercaya</p>
             
             <div id="apiStatus" class="api-status">
-                <i class="fas fa-sync fa-spin"></i> Memeriksa koneksi API...
+                <i class="fas fa-sync fa-spin"></i> Memuat berita kesehatan...
             </div>
 
             <div class="news-controls">
@@ -1889,7 +1895,7 @@
                     Terupdate: <span id="lastUpdateTime">-</span>
                 </p>
                 <div class="api-info">
-                    <small>Data dari: <span id="apiSource">NewsAPI.org</span></small>
+                    <small>Data dari: <span id="apiSource">MediaStack API</span></small>
                 </div>
             </div>
         </div>
@@ -2855,11 +2861,8 @@
             calculatorResult.classList.add('active');
         }
 
-        // ========== FUNGSI BERITA KESEHATAN ==========
-        // Konfigurasi API
-        const API_KEY = '52ce2cff82324ded9348f27bb0496e6f';
-        const API_URL = 'https://newsapi.org/v2/everything';
-        
+        // ========== FUNGSI BERITA KESEHATAN DENGAN MEDIASTACK ==========
+        const MEDIASTACK_API_KEY = '1e7736edd85ba8ed448a69d53694b9e6';
         let allNews = [];
         let currentNewsFilter = 'all';
 
@@ -2879,11 +2882,11 @@
                 statusElement.innerHTML = '<i class="fas fa-sync fa-spin"></i> Mengambil berita terbaru...';
                 statusElement.className = 'api-status status-live';
 
-                // Coba ambil berita kesehatan dalam bahasa Indonesia
-                const query = healthKeywords.slice(0, 3).join(' OR ');
-                const url = `${API_URL}?q=${encodeURIComponent(query)}&language=id&sortBy=publishedAt&pageSize=20&apiKey=${API_KEY}`;
+                // Gunakan MediaStack API
+                const keywords = 'kesehatan,medis,rumah sakit';
+                const url = `http://api.mediastack.com/v1/news?access_key=${MEDIASTACK_API_KEY}&keywords=${keywords}&languages=id&limit=12`;
                 
-                console.log('Fetching from:', url);
+                console.log('Fetching from MediaStack:', url);
                 
                 const response = await fetch(url);
                 
@@ -2893,10 +2896,20 @@
                 
                 const data = await response.json();
                 
-                if (data.status === 'ok' && data.articles && data.articles.length > 0) {
-                    allNews = data.articles;
+                if (data.data && data.data.length > 0) {
+                    allNews = data.data.map(article => ({
+                        title: article.title,
+                        description: article.description,
+                        urlToImage: article.image || getFallbackImage(),
+                        publishedAt: article.published_at,
+                        source: { name: article.source || 'Sumber tidak diketahui' },
+                        url: article.url || '#',
+                        category: getArticleCategory(article)
+                    }));
+                    
                     displayNews(allNews);
-                    statusElement.innerHTML = `<i class="fas fa-check-circle"></i> Berhasil memuat ${data.articles.length} berita`;
+                    statusElement.innerHTML = `<i class="fas fa-check-circle"></i> Berhasil memuat ${allNews.length} berita terkini`;
+                    statusElement.className = 'api-status status-live';
                     updateLastUpdateTime();
                 } else {
                     throw new Error('Tidak ada berita ditemukan');
@@ -2934,7 +2947,7 @@
                             `<div class="fallback-image"><i class="fas fa-newspaper"></i></div>`
                         }
                         <div class="news-category">
-                            ${getArticleCategory(article)}
+                            ${article.category}
                         </div>
                     </div>
                     <div class="news-content">
@@ -2987,12 +3000,14 @@
 
         // Fungsi bantu
         function truncateText(text, maxLength) {
+            if (!text) return 'Deskripsi tidak tersedia';
             if (text.length <= maxLength) return text;
             return text.substr(0, maxLength) + '...';
         }
 
         function formatDate(dateString) {
             try {
+                if (!dateString) return 'Tanggal tidak valid';
                 const date = new Date(dateString);
                 return date.toLocaleDateString('id-ID', {
                     day: 'numeric',
@@ -3009,11 +3024,21 @@
             
             if (content.includes('rumah sakit') || content.includes('hospital')) {
                 return 'Rumah Sakit';
-            } else if (content.includes('obat') || content.includes('medicine')) {
+            } else if (content.includes('obat') || content.includes('medicine') || content.includes('medis')) {
                 return 'Medis';
             } else {
                 return 'Kesehatan';
             }
+        }
+
+        function getFallbackImage() {
+            const healthImages = [
+                'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+                'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+                'https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+                'https://images.unsplash.com/photo-1559757175-0eb30cd8c063?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'
+            ];
+            return healthImages[Math.floor(Math.random() * healthImages.length)];
         }
 
         function updateLastUpdateTime() {
@@ -3026,28 +3051,58 @@
         function loadFallbackNews() {
             const fallbackNews = [
                 {
-                    title: "Program Vaksinasi Nasional Capai Target 70%",
-                    description: "Kementerian Kesehatan mengumumkan keberhasilan program vaksinasi nasional yang telah mencapai 70% populasi target.",
+                    title: "Kemenkes Luncurkan Program Vaksinasi Nasional 2025",
+                    description: "Kementerian Kesehatan meluncurkan program vaksinasi nasional terbaru untuk meningkatkan cakupan imunisasi di seluruh Indonesia.",
                     urlToImage: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date().toISOString(),
                     source: { name: "Kemenkes RI" },
-                    url: "#"
+                    url: "#",
+                    category: "Kesehatan"
                 },
                 {
-                    title: "Penemuan Baru Obat Diabetes Tipe 2",
+                    title: "Penemuan Baru: Obat Diabetes Tipe 2 Lebih Efektif",
                     description: "Peneliti Indonesia berhasil mengembangkan formula obat diabetes tipe 2 yang lebih efektif dengan efek samping minimal.",
                     urlToImage: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date().toISOString(),
+                    publishedAt: new Date(Date.now() - 86400000).toISOString(),
                     source: { name: "Kompas Health" },
-                    url: "#"
+                    url: "#",
+                    category: "Medis"
                 },
                 {
                     title: "Waspada DBD: Kasus Meningkat 30% di Musim Hujan",
                     description: "Kemenkes mengimbau masyarakat waspada terhadap peningkatan kasus DBD yang naik 30% selama musim hujan.",
                     urlToImage: "https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date().toISOString(),
+                    publishedAt: new Date(Date.now() - 172800000).toISOString(),
                     source: { name: "Kemenkes RI" },
-                    url: "#"
+                    url: "#",
+                    category: "Kesehatan"
+                },
+                {
+                    title: "RS Premier Bintaro Buka Layanan Kardiologi Terpadu",
+                    description: "Rumah Sakit Premier Bintaro membuka layanan kardiologi terpadu dengan teknologi terkini untuk penanganan penyakit jantung.",
+                    urlToImage: "https://images.unsplash.com/photo-1516549655669-df5c7898c491?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 259200000).toISOString(),
+                    source: { name: "RS Premier Bintaro" },
+                    url: "#",
+                    category: "Rumah Sakit"
+                },
+                {
+                    title: "Tips Menjaga Kesehatan Mental di Era Digital",
+                    description: "Psikolog membagikan tips praktis menjaga kesehatan mental di tengah tekanan kehidupan digital yang semakin tinggi.",
+                    urlToImage: "https://images.unsplash.com/photo-1559757175-0eb30cd8c063?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 345600000).toISOString(),
+                    source: { name: "Kompas Health" },
+                    url: "#",
+                    category: "Kesehatan"
+                },
+                {
+                    title: "Inovasi Telemedicine Ubah Layanan Kesehatan di Indonesia",
+                    description: "Layanan telemedicine semakin populer dan mengubah cara masyarakat Indonesia mengakses layanan kesehatan.",
+                    urlToImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 432000000).toISOString(),
+                    source: { name: "Tech in Asia" },
+                    url: "#",
+                    category: "Medis"
                 }
             ];
             
@@ -3424,11 +3479,11 @@
             // Perkembangan Anak
             checkDevBtn.addEventListener('click', checkDevelopment);
 
-            // Berita Kesehatan
+            // Berita Kesehatan - Panggil fungsi untuk mengambil berita
             fetchHealthNews();
             
-            // Auto-refresh berita setiap 5 menit
-            setInterval(fetchHealthNews, 300000);
+            // Auto-refresh berita setiap 30 menit
+            setInterval(fetchHealthNews, 30 * 60 * 1000);
         });
     </script>
 
