@@ -2154,13 +2154,22 @@
     <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
 
     <script>
-        // ========== KONFIGURASI GNEWS API ==========
+        // ========== KONFIGURASI BERITA YANG DIPERBAIKI ==========
         const GNEWS_API_KEY = '01ecc529a408acea5b2c68c11b848f58';
         const NEWS_UPDATE_INTERVAL = 10 * 60 * 1000; // 10 menit
-
         let allNews = [];
         let currentNewsFilter = 'all';
         let newsRefreshInterval;
+
+        // Proxy server untuk menghindari CORS
+        const PROXY_SERVERS = [
+            'https://api.allorigins.win/raw?url=',
+            'https://cors-anywhere.herokuapp.com/',
+            'https://corsproxy.io/?',
+            ''
+        ];
+
+        let currentProxyIndex = 0;
 
         // ========== FUNGSI UTAMA ==========
         
@@ -2203,7 +2212,7 @@
             navOverlay.classList.remove('active');
         }
 
-        // ========== FUNGSI GNEWS API ==========
+        // ========== FUNGSI GNEWS API YANG DIPERBAIKI ==========
         async function fetchHealthNews() {
             const statusElement = document.getElementById('apiStatus');
             
@@ -2211,24 +2220,14 @@
                 statusElement.innerHTML = '<i class="fas fa-sync fa-spin"></i> Mengambil berita terkini...';
                 statusElement.className = 'api-status status-live';
 
-                // GNews API - Top headlines kesehatan Indonesia
-                const url = `https://gnews.io/api/v4/top-headlines?category=health&lang=id&country=id&max=12&apikey=${GNEWS_API_KEY}`;
+                // Coba dengan berbagai proxy server
+                const newsData = await fetchWithProxyFallback();
                 
-                console.log('Fetching from GNews API...');
-                
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status} - GNews API Error`);
-                }
-                
-                const data = await response.json();
-                
-                if (data.articles && data.articles.length > 0) {
-                    allNews = data.articles.map(article => ({
+                if (newsData.articles && newsData.articles.length > 0) {
+                    allNews = newsData.articles.map(article => ({
                         title: article.title || 'Judul tidak tersedia',
                         description: article.description || 'Deskripsi tidak tersedia',
-                        urlToImage: article.image || getFallbackImage(),
+                        urlToImage: article.image || article.urlToImage || getFallbackImage(),
                         publishedAt: article.publishedAt || new Date().toISOString(),
                         source: { name: article.source?.name || 'Sumber tidak diketahui' },
                         url: article.url || '#',
@@ -2244,22 +2243,83 @@
                 }
                 
             } catch (error) {
-                console.error('GNews API Error:', error);
-                statusElement.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Gagal mengambil berita: ${error.message}`;
-                statusElement.className = 'api-status status-error';
-                
-                // Fallback ke data contoh
-                loadFallbackNews();
+                console.error('Error fetching news:', error);
+                handleNewsError(error);
             }
             
             updateLastUpdateTime();
         }
 
-        function loadFallbackNews() {
-            const fallbackNews = [
+        // Fungsi dengan fallback proxy
+        async function fetchWithProxyFallback() {
+            const apiUrl = `https://gnews.io/api/v4/top-headlines?category=health&lang=id&country=id&max=12&apikey=${GNEWS_API_KEY}`;
+            
+            for (let i = currentProxyIndex; i < PROXY_SERVERS.length; i++) {
+                try {
+                    const proxyUrl = PROXY_SERVERS[i] + encodeURIComponent(apiUrl);
+                    console.log(`Mencoba proxy: ${PROXY_SERVERS[i] || 'Direct'}`);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+                    
+                    const response = await fetch(proxyUrl, {
+                        method: 'GET',
+                        signal: controller.signal,
+                        headers: {
+                            'Accept': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Jika berhasil, simpan index proxy yang berhasil
+                    if (data.articles && data.articles.length > 0) {
+                        currentProxyIndex = i;
+                        return data;
+                    }
+                    
+                } catch (error) {
+                    console.log(`Proxy ${i} gagal:`, error.message);
+                    // Lanjut ke proxy berikutnya
+                }
+            }
+            
+            // Jika semua proxy gagal, gunakan fallback data
+            throw new Error('Semua koneksi gagal');
+        }
+
+        // Fungsi error handling yang lebih baik
+        function handleNewsError(error) {
+            const statusElement = document.getElementById('apiStatus');
+            
+            if (error.message.includes('Failed to fetch') || error.message.includes('Network Error')) {
+                statusElement.innerHTML = '<i class="fas fa-wifi"></i> Masalah koneksi. Menggunakan berita offline...';
+                statusElement.className = 'api-status status-warning';
+            } else if (error.message.includes('429')) {
+                statusElement.innerHTML = '<i class="fas fa-stopwatch"></i> Terlalu banyak permintaan. Menggunakan berita offline...';
+                statusElement.className = 'api-status status-warning';
+            } else {
+                statusElement.innerHTML = '<i class="fas fa-info-circle"></i> Menggunakan berita offline...';
+                statusElement.className = 'api-status status-warning';
+            }
+            
+            // Load berita offline yang berkualitas
+            loadEnhancedOfflineNews();
+        }
+
+        // Berita offline yang komprehensif
+        function loadEnhancedOfflineNews() {
+            const offlineNews = [
                 {
                     title: "Kemenkes Luncurkan Program Vaksinasi Nasional 2025",
-                    description: "Kementerian Kesehatan meluncurkan program vaksinasi nasional terbaru untuk meningkatkan cakupan imunisasi di seluruh Indonesia.",
+                    description: "Kementerian Kesehatan meluncurkan program vaksinasi nasional terbaru untuk meningkatkan cakupan imunisasi di seluruh Indonesia dengan target 95% cakupan berbagai penyakit.",
                     urlToImage: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date().toISOString(),
                     source: { name: "Kemenkes RI" },
@@ -2267,27 +2327,72 @@
                     category: "Kesehatan"
                 },
                 {
-                    title: "Penemuan Baru: Obat Diabetes Tipe 2 Lebih Efektif",
-                    description: "Peneliti Indonesia berhasil mengembangkan formula obat diabetes tipe 2 yang lebih efektif dengan efek samping minimal.",
-                    urlToImage: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    title: "Waspada DBD: Kasus Meningkat 30% di Musim Hujan",
+                    description: "Kemenkes mengimbau masyarakat waspada terhadap peningkatan kasus DBD yang naik 30% selama musim hujan. Lakukan 3M Plus untuk pencegahan efektif.",
+                    urlToImage: "https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
                     publishedAt: new Date(Date.now() - 86400000).toISOString(),
-                    source: { name: "Kompas Health" },
+                    source: { name: "Kemenkes RI" },
+                    url: "#",
+                    category: "Kesehatan"
+                },
+                {
+                    title: "RS Rujukan COVID-19 Siap Antisipasi Gelombang Baru",
+                    description: "Rumah sakit rujukan COVID-19 di seluruh Indonesia diperkuat untuk mengantisipasi kemungkinan gelombang baru varian virus dengan penambahan tempat tidur dan alat medis.",
+                    urlToImage: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 172800000).toISOString(),
+                    source: { name: "Kemenkes RI" },
+                    url: "#",
+                    category: "Rumah Sakit"
+                },
+                {
+                    title: "Pentingnya Skrining Kesehatan Berkala untuk Usia 40+",
+                    description: "Dokter menekankan pentingnya skrining kesehatan berkala bagi usia 40 tahun ke atas untuk deteksi dini penyakit tidak menular seperti diabetes dan hipertensi.",
+                    urlToImage: "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 259200000).toISOString(),
+                    source: { name: "Health Today" },
+                    url: "#",
+                    category: "Kesehatan"
+                },
+                {
+                    title: "Inovasi Telemedicine Ubah Layanan Kesehatan di Indonesia",
+                    description: "Layanan telemedicine semakin populer di Indonesia, memberikan akses kesehatan yang lebih mudah dan terjangkau bagi masyarakat di daerah terpencil.",
+                    urlToImage: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 345600000).toISOString(),
+                    source: { name: "Tech Health Indonesia" },
                     url: "#",
                     category: "Medis"
                 },
                 {
-                    title: "Waspada DBD: Kasus Meningkat 30% di Musim Hujan",
-                    description: "Kemenkes mengimbau masyarakat waspada terhadap peningkatan kasus DBD yang naik 30% selama musim hujan.",
-                    urlToImage: "https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                    publishedAt: new Date(Date.now() - 172800000).toISOString(),
+                    title: "Gerakan Masyarakat Hidup Sehat (GERMAS) Capai Target",
+                    description: "Program GERMAS berhasil meningkatkan kesadaran masyarakat tentang pentingnya pola hidup sehat dengan pencapaian target 70% partisipasi aktif.",
+                    urlToImage: "https://images.unsplash.com/photo-1559757175-0eb30cd8c063?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 432000000).toISOString(),
                     source: { name: "Kemenkes RI" },
                     url: "#",
                     category: "Kesehatan"
+                },
+                {
+                    title: "Penanganan Stunting di Indonesia Menunjukkan Kemajuan",
+                    description: "Angka stunting di Indonesia menunjukkan penurunan signifikan berkat program intervensi gizi yang terintegrasi di seluruh puskesmas.",
+                    urlToImage: "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 518400000).toISOString(),
+                    source: { name: "Kompas Health" },
+                    url: "#",
+                    category: "Kesehatan"
+                },
+                {
+                    title: "Rumah Sakit di Bali Tingkatkan Layanan Pariwisata Kesehatan",
+                    description: "Rumah sakit di Bali mengembangkan layanan kesehatan bertaraf internasional untuk mendukung pariwisata kesehatan yang semakin populer.",
+                    urlToImage: "https://images.unsplash.com/photo-1519494080410-f9aa76cb4283?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+                    publishedAt: new Date(Date.now() - 604800000).toISOString(),
+                    source: { name: "Bali Health" },
+                    url: "#",
+                    category: "Rumah Sakit"
                 }
             ];
             
-            allNews = fallbackNews;
-            displayNews(fallbackNews);
+            allNews = offlineNews;
+            displayNews(offlineNews);
         }
 
         function displayNews(newsArray) {
@@ -2414,7 +2519,8 @@
             const healthImages = [
                 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
                 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-                'https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'
+                'https://images.unsplash.com/photo-1584467735871-8db9ac8d0eaa?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
+                'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'
             ];
             return healthImages[Math.floor(Math.random() * healthImages.length)];
         }
